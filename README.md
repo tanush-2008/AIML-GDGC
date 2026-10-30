@@ -25,7 +25,16 @@ data/raw/sample_submission.csv
 
 Competition data is excluded from this code package. `id` is preserved in predictions but dropped from model features. `proto` and `service` are passed to CatBoost as categorical features; numeric infinities are converted to missing values.
 
-## Method and reasoning
+## Feature engineering
+
+The pipeline uses a small set of deliberate transformations suited to CatBoost rather than scaling numeric variables or expanding them into one-hot columns:
+
+- Drop `id` from the model inputs because it is an opaque row identifier; retain it unchanged in the output and preserve test row order.
+- Keep `proto` and `service` as categorical strings, replacing missing values with a dedicated sentinel. Replace positive and negative numeric infinity with missing values.
+- Form a `proto|service` traffic profile for estimating how much each training row represents the test distribution. This profile drives sample weights; it is not an extra target-derived feature.
+- Do not use `Target` or row ID as predictors. No target encoding or label-dependent test features are used in the selected blend.
+
+## Models and reasoning
 
 The selected predictions average probabilities from two CatBoost models:
 
@@ -35,7 +44,13 @@ The selected predictions average probabilities from two CatBoost models:
 
 Both target models use CatBoost with depth 8, learning rate 0.05, L2 leaf regularization 8, random strength 0.3, seed 42, and four CPU threads. The domain classifiers use depth 6 and 180 iterations. The blend was chosen because it had the highest observed Kaggle score, not because the internal validation estimate was highest.
 
-The original validation split preserves `proto|service|target` strata. Its scores were substantially more optimistic than the public score, so they are diagnostic only. The public score is the evidence used to select the final prediction file. The competition's private leaderboard score may differ.
+## Evaluation methodology
+
+`train_model.py` reserves 20% of the labeled data using a split within `proto|service|target` strata, so each observed profile/class combination is represented in validation when possible. It reports ordinary macro-F1 and macro-F1 weighted by estimated test/train profile shares. It compares profile-only, class-balanced, and combined weighting, selects by profile-weighted macro-F1 (ordinary macro-F1 breaks ties), then refits on all labeled rows.
+
+`validate_blend_alpha.py` uses a separate profile/target-stratified 20% holdout. It estimates train-vs-test density ratios out of fold on the fit rows, weights the held-out score by estimated test-domain likelihood, and compares ordinary and domain-weighted macro-F1 across blend weights. This holdout uses labels from the same source sample and cannot establish the hidden-test score under severe shift. Its results are diagnostic only.
+
+Final model selection used the public Kaggle scores from actual submissions. The 0.25 and 0.30 blends both scored 0.84588, above the other scored candidates. The public leaderboard is only a partial evaluation; private leaderboard performance may differ. The competition screenshot showed that this score was not first place, so this README calls it the best confirmed result from the tested submissions for this account, not a winning result.
 
 ## Results of tested alternatives
 
