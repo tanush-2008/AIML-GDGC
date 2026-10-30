@@ -2,20 +2,31 @@
 
 ## Selected result
 
-The best **confirmed public Kaggle score** in the submission history available for this project is **0.84588**. Two prediction files tied at that score:
+The best confirmed public Kaggle score in the submission history available for this project is **0.84588**. Two files tied:
 
-- `outputs/submission_blend_candidate.csv` — 75% profile weighted model + 25% domain weighted model.
-- `outputs/submission_blend_alpha_030.csv` — 70% profile weighted model + 30% domain weighted model.
+- `outputs/submission_blend_candidate.csv`: 75% profile weighted model + 25% domain weighted model.
+- `outputs/submission_blend_alpha_030.csv`: 70% profile weighted model + 30% domain weighted model.
 
-Both have the required `id,Target` columns and 33,161 prediction rows. The 0.25 blend was the first file at this score; the 0.30 blend was later submitted and tied it. This is the best score observed for this account among the approaches tried; it is not a claim of first place. Other candidates below were not confirmed improvements.
+Both files have the required `id,Target` columns and 33,161 predictions in test row order. This is the best score observed among the submissions tried for this account; it is not a claim of first place. See [`outputs/score_history.json`](outputs/score_history.json) for the recorded scores.
+
+## Repository map
+
+| Path | Purpose |
+|---|---|
+| `fit_blend_candidate.py` | Reproduces the selected probability blend and alpha sweep. |
+| `fit_domain_candidate.py` | Shared feature and density ratio helpers; can also fit the lower scoring domain-only candidate. |
+| `train_model.py` | Profile weighted baseline and shared label, feature, and profile weighting utilities. |
+| `experiments/` | Optional alternatives and validation diagnostics; none is needed to reproduce the selected blend. See [`experiments/README.md`](experiments/README.md). |
+| `outputs/` | Scored prediction files and score history are tracked; generated diagnostics and unscored alternatives are ignored by Git. |
+| `data/raw/README.md` | Describes where to place the official competition files. The data itself is excluded. |
 
 ## Problem and data
 
-The task is four class classification of network traffic into `Availability`, `Benign`, `Reconnaissance`, and `Spoofing`. The supplied training file has 84,713 labeled rows, 82 predictors, and an opaque `id` column. The test file has 33,161 rows. `Availability` is the majority class (80,072 training rows), so ordinary accuracy or a random row split can give a misleading picture of performance.
+The task is four class classification of network traffic into `Availability`, `Benign`, `Reconnaissance`, and `Spoofing`. The training set has 84,713 labeled rows and 82 predictors; the test set has 33,161 rows. `Availability` is the majority class (80,072 training rows), so a random row split or accuracy alone can give a misleading view of performance.
 
-The train and test traffic profiles differ sharply. For example, `tcp|-` is about 94.5% of training but 46.0% of test; `udp|dns` is about 1.35% of training and 24.6% of test. A train-versus-test classifier reached AUC about 0.99998. This is evidence of severe covariate shift. It does not prove that labels are stable under the shift, and extreme density ratios can be noisy.
+Train and test traffic profiles differ sharply. For example, `tcp|-` is about 94.5% of training but 46.0% of test; `udp|dns` is about 1.35% of training and 24.6% of test. A train-versus-test classifier reached AUC about 0.99998, indicating severe covariate shift. This does not prove that labels are stable under the shift, and very large density ratios can be noisy.
 
-Place the official competition files here before running the models:
+Place the organizer-provided files here to retrain:
 
 ```text
 data/raw/train.csv
@@ -23,66 +34,60 @@ data/raw/test.csv
 data/raw/sample_submission.csv
 ```
 
-Competition data is excluded from this code package. `id` is preserved in predictions but dropped from model features. `proto` and `service` are passed to CatBoost as categorical features; numeric infinities are converted to missing values.
-
 ## Feature engineering
 
-The pipeline uses a small set of deliberate transformations suited to CatBoost rather than scaling numeric variables or expanding them into one-hot columns:
+The pipeline uses a small set of deliberate transformations suited to CatBoost:
 
-- Drop `id` from the model inputs because it is an opaque row identifier; retain it unchanged in the output and preserve test row order.
-- Keep `proto` and `service` as categorical strings, replacing missing values with a dedicated sentinel. Replace positive and negative numeric infinity with missing values.
-- Form a `proto|service` traffic profile for estimating how much each training row represents the test distribution. This profile drives sample weights; it is not an extra target-derived feature.
-- Do not use `Target` or row ID as predictors. No target encoding or label-dependent test features are used in the selected blend.
+- Drop opaque row `id` from the model inputs, but preserve it unchanged in the output and retain test row order.
+- Keep `proto` and `service` as categorical strings; replace missing category values with a sentinel.
+- Convert numeric positive and negative infinity values to missing values. Numeric features do not need scaling for these tree models.
+- Form a `proto|service` traffic profile to estimate how representative each training row is of the test distribution. Use this profile for sample weights, not as a target-derived feature.
+- Do not use `Target` or `id` as predictors. The selected blend uses no target encoding or label-dependent test features.
 
 ## Models and reasoning
 
-The selected predictions average probabilities from two CatBoost models:
+The selected output averages probabilities from two CatBoost models:
 
-1. **Profile weighted model.** For each `proto|service` profile, assign training rows a weight equal to the test share divided by the training share. This shifts emphasis toward profiles common in test data. It uses 238 iterations.
-2. **Domain weighted model.** Train a classifier to distinguish train rows from test rows. Use three out of fold predictions to estimate density ratios for the labeled rows, clip the raw ratios to `[0.10, 20]`, and normalize weights to mean one. Fit a second CatBoost classifier for 175 iterations.
-3. **Probability blend.** Average the class probabilities at 75% / 25% for the selected `submission_blend_candidate.csv`. A 70% / 30% version changed only a small number of labels and tied the same public score.
+1. **Profile weighted model:** weight each training row by its test profile share divided by its training profile share, emphasizing traffic profiles that appear more often in test. This model uses 238 iterations.
+2. **Domain weighted model:** train a classifier to distinguish train rows from test rows. Use three out-of-fold predictions to estimate density ratios for labeled rows; clip raw ratios to `[0.10, 20]`, then normalize their mean to one. Fit a second CatBoost model with these weights for 175 iterations.
+3. **Probability blend:** average the two models' class probabilities at 75% / 25%. A 70% / 30% blend changed only a small number of labels and tied the same public score.
 
-Both target models use CatBoost with depth 8, learning rate 0.05, L2 leaf regularization 8, random strength 0.3, seed 42, and four CPU threads. The domain classifiers use depth 6 and 180 iterations. The blend was chosen because it had the highest observed Kaggle score, not because the internal validation estimate was highest.
+Both target models use depth 8, learning rate 0.05, L2 leaf regularization 8, random strength 0.3, seed 42, and four CPU threads. Domain classifiers use depth 6 and 180 iterations. The blend was selected because its observed Kaggle score was highest, not because an internal estimate looked best.
 
 ## Evaluation methodology
 
-`train_model.py` reserves 20% of the labeled data using a split within `proto|service|target` strata, so each observed profile/class combination is represented in validation when possible. It reports ordinary macro-F1 and macro-F1 weighted by estimated test/train profile shares. It compares profile-only, class-balanced, and combined weighting, selects by profile-weighted macro-F1 (ordinary macro-F1 breaks ties), then refits on all labeled rows.
+`train_model.py` holds out 20% of labeled rows within `proto|service|target` strata, preserving each observed profile/class combination where possible. It reports ordinary macro-F1 and macro-F1 weighted by estimated test/train profile shares. It compares profile-only, class-balanced, and combined weighting, selects by profile-weighted macro-F1 (ordinary macro-F1 breaks ties), then refits the baseline on all labeled rows.
 
-`validate_blend_alpha.py` uses a separate profile/target-stratified 20% holdout. It estimates train-vs-test density ratios out of fold on the fit rows, weights the held-out score by estimated test-domain likelihood, and compares ordinary and domain-weighted macro-F1 across blend weights. This holdout uses labels from the same source sample and cannot establish the hidden-test score under severe shift. Its results are diagnostic only.
+`experiments/validate_blend_alpha.py` uses a separate profile/target-stratified 20% holdout. It estimates train-versus-test density ratios out of fold on the fit rows, weights the held-out evaluation by estimated test-domain likelihood, and compares ordinary and domain weighted macro-F1 for several blend weights. This is diagnostic: source holdout labels cannot guarantee performance on the shifted hidden test set.
 
-Final model selection used the public Kaggle scores from actual submissions. The 0.25 and 0.30 blends both scored 0.84588, above the other scored candidates. The public leaderboard is only a partial evaluation; private leaderboard performance may differ. The competition screenshot showed that this score was not first place, so this README calls it the best confirmed result from the tested submissions for this account, not a winning result.
+Final selection used public Kaggle scores from actual submissions. The 0.25 and 0.30 blends both scored 0.84588. The public leaderboard is only a partial evaluation and private performance may differ. In the leaderboard screenshot available during the challenge, this score was not first place.
 
-## Results of tested alternatives
+## Recorded results
 
 | Candidate | Public score | Status |
 |---|---:|---|
 | 75% profile + 25% domain probability blend | **0.84588** | Confirmed best |
 | 70% profile + 30% domain probability blend | **0.84588** | Confirmed tie |
-| Profile weighted baseline (`outputs/submission.csv`) | 0.84551 | Scored |
+| Profile weighted baseline | 0.84551 | Scored |
 | Port category model | 0.84403 | Scored |
 | LightGBM alternative | 0.84368 | Scored |
 | Domain weighted model alone | 0.84347 | Scored |
 
-The capped density ratio and consensus pseudo label experiments in the working outputs are **unscored**. Their local validation or agreement with other models cannot establish that they improve the Kaggle score, so they are not selected as the final result.
+Weight clipping and pseudo label experiments are unscored. Local validation or agreement with other models is not evidence that they improve the Kaggle score; they are not selected as final predictions.
 
-## Reproduce
+## Reproduce the selected blend
 
-Use Python 3.10 or later. In PowerShell, from this project directory:
+Use Python 3.10 or later. From the repository root:
 
 ```powershell
 python -m pip install -r requirements.txt
-python train_model.py
 python fit_blend_candidate.py
 ```
 
-`train_model.py` evaluates the profile weighted baseline and writes a Kaggle format baseline submission. `fit_blend_candidate.py` independently fits the two selected components, writes the selected 0.25 blend, the 0.10–0.50 sweep files, the 0.30 tied-best file, a report, and cached probabilities under `outputs/`. The run may take several minutes on CPU. The provided best prediction files are included so the result can be reviewed without retraining.
+This fits both selected components and writes the 0.25 blend, 0.10–0.50 alpha sweep, class count report, and probability cache under `outputs/`. It also writes `submission_blend_alpha_030.csv`, which tied the confirmed best score. Training can take several minutes on CPU. To fit only the profile weighted baseline, run `python train_model.py`.
 
-Optional experiments have separate scripts. `fit_clipped_domain_candidate.py` and `fit_consensus_pseudo_candidate.py` create unscored alternatives. `validate_blend_alpha.py` evaluates blend weights on a test-profile-weighted holdout; this is diagnostic and does not replace a Kaggle score. The LightGBM experiment requires the optional dependencies in `requirements_lightgbm.txt`.
+This package excludes the competition data. The included prediction files allow review without retraining. The supplied `sample_submission.csv` is used by the baseline script to verify ID order and output format.
 
-## Package contents and interview notes
+## Interview notes
 
-The ZIP contains the source code, dependency lists, this explanation, the two tied-best prediction files, and the score history. It excludes the competition data and the exploratory prediction files that did not beat the confirmed score. The training code can regenerate the best predictions when the official CSV files are placed under `data/raw/`.
-
-For an interview, be prepared to explain why the train/test shift motivated profile and density ratio weighting, why the density ratios were clipped, how class probabilities were blended, and why weighted holdout results were not treated as a substitute for the Kaggle public score. The final selected output is `id,Target`; retain the opaque test IDs in the exact provided row order.
-
-This work used AI assistance. Review and understand the code before presenting the methodology.
+Be ready to explain why the train/test shift motivated profile and density ratio weighting, why extreme ratios were clipped, how the probability blend was selected, and why the public Kaggle score was more reliable for model selection than the optimistic holdout estimates. This work used AI assistance; review and understand the code before presenting the methodology.

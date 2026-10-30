@@ -48,7 +48,7 @@ def auc_rank(scores: np.ndarray, labels: np.ndarray) -> float:
 
 
 def main() -> None:
-    root = Path(__file__).resolve().parent
+    root = Path(__file__).resolve().parents[1]
     train_frame = pd.read_csv(root / "data/raw/train.csv")
     test_frame = pd.read_csv(root / "data/raw/test.csv")
     y = train_frame["Target"].map(LABEL_TO_CODE).to_numpy(dtype=int)

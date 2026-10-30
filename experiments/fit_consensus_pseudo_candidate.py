@@ -27,7 +27,7 @@ BLEND_ALPHA = 0.50
 
 
 def main() -> None:
-    root = Path(__file__).resolve().parent
+    root = Path(__file__).resolve().parents[1]
     outputs = root / "outputs"
     train = pd.read_csv(root / "data/raw/train.csv")
     test = pd.read_csv(root / "data/raw/test.csv")

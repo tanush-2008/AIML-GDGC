@@ -38,7 +38,7 @@ def add_port_categories(features: pd.DataFrame) -> pd.DataFrame:
 
 
 def main() -> None:
-    root = Path(__file__).resolve().parent
+    root = Path(__file__).resolve().parents[1]
     train = pd.read_csv(root / "data/raw/train.csv")
     test = pd.read_csv(root / "data/raw/test.csv")
     sample = pd.read_csv(root / "data/raw/sample_submission.csv")

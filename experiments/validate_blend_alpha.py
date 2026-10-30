@@ -32,7 +32,7 @@ ALPHAS = (0.0, 0.10, 0.20, 0.25, 0.30, 0.40, 0.50, 1.0)
 
 
 def main() -> None:
-    root = Path(__file__).resolve().parent
+    root = Path(__file__).resolve().parents[1]
     train = pd.read_csv(root / "data/raw/train.csv")
     test = pd.read_csv(root / "data/raw/test.csv")
     y = train["Target"].map(LABEL_TO_CODE).to_numpy(dtype=int)
