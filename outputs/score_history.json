@@ -1,0 +1,44 @@
+{
+  "challenge": "Network Intrusion Detection ML Challenge",
+  "observed_on": "2026-10-30",
+  "metric_scores_as_displayed_on_kaggle": [
+    {
+      "file": "submission_blend_candidate.csv",
+      "method": "75% profile weighted + 25% domain weighted probabilities",
+      "public_score": 0.84588,
+      "status": "scored"
+    },
+    {
+      "file": "submission_blend_alpha_030.csv",
+      "method": "70% profile weighted + 30% domain weighted probabilities",
+      "public_score": 0.84588,
+      "status": "scored"
+    },
+    {
+      "file": "submission.csv",
+      "method": "profile weighted CatBoost baseline",
+      "public_score": 0.84551,
+      "status": "scored"
+    },
+    {
+      "file": "submission_port_category_candidate.csv",
+      "method": "port category alternative",
+      "public_score": 0.84403,
+      "status": "scored"
+    },
+    {
+      "file": "submission_lightgbm_candidate.csv",
+      "method": "LightGBM alternative",
+      "public_score": 0.84368,
+      "status": "scored"
+    },
+    {
+      "file": "submission_domain_candidate.csv",
+      "method": "domain weighted CatBoost model alone",
+      "public_score": 0.84347,
+      "status": "scored"
+    }
+  ],
+  "selected_score": 0.84588,
+  "note": "Scores were read from the user's Kaggle submission history. Unscored experimental candidates are intentionally not ranked here."
+}

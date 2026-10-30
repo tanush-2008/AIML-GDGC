@@ -1,0 +1,12 @@
+__pycache__/
+.venv/
+catboost_info/
+data/raw/*.csv
+*.zip
+outputs/*
+!outputs/submission.csv
+!outputs/submission_blend_candidate.csv
+!outputs/submission_blend_alpha_030.csv
+!outputs/score_history.json
+
+docs/archive/
